@@ -1,0 +1,15 @@
+{
+  "name": "zendoro",
+  "version": "0.5.0",
+  "description": "A simple timer to use with the Pomodoro Technique",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": "https://github.com/kprav33n/zendoro",
+  "author": "Praveen Kumar <praveen+git@kumar.in>",
+  "license": "MIT",
+  "dependencies": {
+    "electron": "^1.7.9"
+  }
+}
