@@ -165,6 +165,7 @@ class ZenFlow {
 let flow;
 
 app.on('ready', () => {
+  app.dock.hide();
   flow = new ZenFlow();
 });
 
