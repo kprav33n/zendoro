@@ -43,15 +43,20 @@ function clearCounter(tray) {
   tray.setTitle('');
 }
 
+const MenuIndex = Object.freeze({
+  start: 0,
+  cancel: 1,
+});
+
 /* eslint-disable no-param-reassign */
 function idleState(contextMenu) {
-  contextMenu.items[0].enabled = true;
-  contextMenu.items[1].enabled = false;
+  contextMenu.items[MenuIndex.start].enabled = true;
+  contextMenu.items[MenuIndex.cancel].enabled = false;
 }
 
 function timerState(contextMenu) {
-  contextMenu.items[0].enabled = false;
-  contextMenu.items[1].enabled = true;
+  contextMenu.items[MenuIndex.start].enabled = false;
+  contextMenu.items[MenuIndex.cancel].enabled = true;
 }
 /* eslint-enable no-param-reassign */
 
