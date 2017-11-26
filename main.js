@@ -1,11 +1,14 @@
 const {
+  BrowserWindow,
   Menu,
   Notification,
   Tray,
   app,
   globalShortcut,
 } = require('electron');
+const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 // FIXME: Verify if this function is written in JS idiomatic way.
 function timeToString(ms) {
@@ -44,8 +47,58 @@ function showNotification(text) {
   n.show();
 }
 
-class ZenFlow {
+class ConfigStore {
   constructor() {
+    this.config = {
+      activityLength: {
+        task: 25 * 60 * 1000,
+        shortInterval: 5 * 60 * 1000,
+        longInterval: 15 * 60 * 1000,
+      },
+    };
+    this.configFile = path.join(app.getPath('userData'), 'config.js');
+
+    this.initUserConfig();
+    // this.loadConfig();
+  }
+
+  loadConfig() {
+    if (!fs.existsSync(this.configFile)) {
+      return;
+    }
+
+    const configData = fs.readFileSync(this.configFile);
+    const script = new vm.Script(configData);
+    const module = {};
+    const context = vm.createContext({ module });
+    script.runInContext(context);
+    this.config = module.exports.config;
+
+    const that = this;
+    /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
+    fs.watchFile(this.configFile, (_curr, _prev) => {
+      that.loadConfig();
+      showNotification('Configuration reloaded.');
+    });
+  }
+
+  initUserConfig() {
+    if (fs.existsSync(this.configFile)) {
+      this.loadConfig();
+      return;
+    }
+
+    showNotification("Initializing user's default configuration.");
+    const defaultConfigFile = path.resolve(__dirname, 'config-default.js');
+    const pipe = fs.createReadStream(defaultConfigFile).pipe(fs.createWriteStream(this.configFile));
+    const that = this;
+    pipe.on('finish', () => { that.loadConfig(); });
+  }
+}
+
+class ZenFlow {
+  constructor(config) {
+    this.config = config;
     this.tray = new Tray(path.join(__dirname, 'assets/images/TrayIconTemplate.png'));
     this.tray.setToolTip('Zendoro');
     const that = this;
@@ -82,30 +135,44 @@ class ZenFlow {
       shortBreak: 1,
       longBreak: 2,
       cancel: 3,
+      quit: 4,
     });
 
     this.transitionToIdle();
 
+    this.willQuit = false;
+    this.window = new BrowserWindow({ show: false });
+    this.window.on('close', (e) => {
+      if (this.willQuit) {
+        this.window = null;
+        app.exit();
+      } else {
+        e.preventDefault();
+        this.window.hide();
+      }
+    });
+    app.dock.hide();
+
     // FIXME: This doesn't play well with alternate keybard layouts.
-    this.shortcut = globalShortcut.register('CmdOrCtrl+Alt+R', () => { this.tray.popUpContextMenu(); });
+    // this.shortcut = globalShortcut.register(
+    //   'CmdOrCtrl+Alt+R',
+    //   () => { this.tray.popUpContextMenu(); }
+    // );
   }
 
   startTask() {
-    const length = 25 * 60 * 1000;
     this.currentActivity = 'Task';
-    this.startTimer(length);
+    this.startTimer(this.config.config.activityLength.task);
   }
 
   startShortBreak() {
-    const length = 5 * 60 * 1000;
     this.currentActivity = 'Short break';
-    this.startTimer(length);
+    this.startTimer(this.config.config.activityLength.shortBreak);
   }
 
   startLongBreak() {
-    const length = 15 * 60 * 1000;
     this.currentActivity = 'Long break';
-    this.startTimer(length);
+    this.startTimer(this.config.config.activityLength.longBreak);
   }
 
   cancelCurrentActivity() {
@@ -116,9 +183,10 @@ class ZenFlow {
     }
   }
 
-  willQuit() {
+  beforeQuit() {
     this.stopTimer();
     globalShortcut.unregisterAll();
+    this.willQuit = true;
   }
 
   startTimer(length) {
@@ -165,10 +233,10 @@ class ZenFlow {
 let flow;
 
 app.on('ready', () => {
-  app.dock.hide();
-  flow = new ZenFlow();
+  const config = new ConfigStore();
+  flow = new ZenFlow(config);
 });
 
-app.on('will-quit', () => {
-  flow.willQuit();
+app.on('before-quit', () => {
+  flow.beforeQuit();
 });

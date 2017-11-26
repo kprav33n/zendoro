@@ -13,7 +13,7 @@
   "author": "Praveen Kumar <praveen+git@kumar.in>",
   "license": "MIT",
   "dependencies": {
-    "electron": "^1.7.9"    
+    "electron": "^1.7.9"
   },
   "devDependencies": {
     "electron-packager": "^10.1.0",
