@@ -6,5 +6,10 @@ module.exports = {
       shortBreak: 5 * 60 * 1000,
       longBreak: 15 * 60 * 1000,
     },
+
+    // Keyboard shortcuts.
+    globalShortcut: {
+      showMenu: 'CmdOrCtrl+Alt+R',
+    },
   },
 };

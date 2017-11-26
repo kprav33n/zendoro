@@ -59,7 +59,6 @@ class ConfigStore {
     this.configFile = path.join(app.getPath('userData'), 'config.js');
 
     this.initUserConfig();
-    // this.loadConfig();
   }
 
   loadConfig() {
@@ -154,10 +153,10 @@ class ZenFlow {
     app.dock.hide();
 
     // FIXME: This doesn't play well with alternate keybard layouts.
-    // this.shortcut = globalShortcut.register(
-    //   'CmdOrCtrl+Alt+R',
-    //   () => { this.tray.popUpContextMenu(); }
-    // );
+    this.shortcut = globalShortcut.register(
+      this.config.config.globalShortcut.showMenu,
+      () => { this.tray.popUpContextMenu(); },
+    );
   }
 
   startTask() {
