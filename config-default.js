@@ -7,6 +7,9 @@ module.exports = {
       longBreak: 15 * 60 * 1000,
     },
 
+    // Show idle duration timer.
+    showIdle: true,
+
     // Keyboard shortcuts.
     globalShortcut: {
       showMenu: 'CmdOrCtrl+Alt+R',

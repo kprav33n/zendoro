@@ -11,12 +11,19 @@ const path = require('path');
 const vm = require('vm');
 
 // FIXME: Verify if this function is written in JS idiomatic way.
-function timeToString(ms) {
-  if (ms <= 0) {
+function timeToString(ms, showIdle) {
+  if (!showIdle && ms <= 0) {
     return '';
   }
 
-  let t = Math.ceil(ms / 1000);
+  let idlePrefix = '';
+  let remMs = ms;
+  if (ms <= 0) {
+    idlePrefix = 'Idle for ';
+    remMs = -ms;
+  }
+
+  let t = Math.ceil(remMs / 1000);
   const seconds = t % 60;
   t = Math.trunc(t / 60);
   const minutes = t % 60;
@@ -37,7 +44,7 @@ function timeToString(ms) {
     hoursPrefix = `${hours.toString().padStart(2, '0')}:`;
   }
 
-  return `${daysPrefix}${hoursPrefix}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  return `${idlePrefix}${daysPrefix}${hoursPrefix}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function showNotification(text) {
@@ -55,6 +62,7 @@ class ConfigStore {
         shortInterval: 5 * 60 * 1000,
         longInterval: 15 * 60 * 1000,
       },
+      showIdle: true,
     };
     this.configFile = path.join(app.getPath('userData'), 'config.js');
 
@@ -137,6 +145,7 @@ class ZenFlow {
       quit: 4,
     });
 
+    this.updateInterval = setInterval(() => { this.updateTrayTitle(); }, 500);
     this.transitionToIdle();
 
     this.willQuit = false;
@@ -175,15 +184,14 @@ class ZenFlow {
   }
 
   cancelCurrentActivity() {
-    if (this.interval != null) {
-      this.stopTimer();
-      this.updateTrayTitle();
+    if (this.inProgress) {
+      this.transitionToIdle();
       showNotification(`${this.currentActivity} cancelled.`);
     }
   }
 
   beforeQuit() {
-    this.stopTimer();
+    clearInterval(this.updateInterval);
     globalShortcut.unregisterAll();
     this.willQuit = true;
   }
@@ -193,25 +201,18 @@ class ZenFlow {
     this.transitionToRunning(length);
   }
 
-  stopTimer() {
-    if (this.interval != null) {
-      clearInterval(this.interval);
-    }
-    this.transitionToIdle();
-  }
-
   updateTrayTitle() {
     const remaining = this.end - Date.now();
-    this.tray.setTitle(timeToString(remaining));
+    this.tray.setTitle(timeToString(remaining, this.config.config.showIdle));
 
-    if (this.interval != null && remaining <= 0) {
+    if (this.inProgress && remaining <= 0) {
       this.transitionToIdle();
       showNotification(`${this.currentActivity} completed.`);
     }
   }
 
   transitionToIdle() {
-    this.interval = null;
+    this.inProgress = false;
     this.end = Date.now();
     this.contextMenu.items[this.menuIndex.start].enabled = true;
     this.contextMenu.items[this.menuIndex.shortBreak].enabled = true;
@@ -220,8 +221,8 @@ class ZenFlow {
   }
 
   transitionToRunning(length) {
+    this.inProgress = true;
     this.end = new Date(Date.now() + length).getTime();
-    this.interval = setInterval(() => { this.updateTrayTitle(); }, 500);
     this.contextMenu.items[this.menuIndex.start].enabled = false;
     this.contextMenu.items[this.menuIndex.shortBreak].enabled = false;
     this.contextMenu.items[this.menuIndex.longBreak].enabled = false;
