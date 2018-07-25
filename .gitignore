@@ -6,3 +6,6 @@ Zendoro-darwin-x64
 
 # macOS.
 .DS_Store
+
+# Emacs.
+.tern-port
