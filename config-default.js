@@ -4,7 +4,7 @@ module.exports = {
     activityLength: {
       task: 25 * 60 * 1000,
       shortBreak: 5 * 60 * 1000,
-      longBreak: 15 * 60 * 1000,
+      longBreak: 15 * 60 * 1000
     },
 
     // Show idle duration timer.
@@ -12,7 +12,7 @@ module.exports = {
 
     // Keyboard shortcuts.
     globalShortcut: {
-      showMenu: 'CmdOrCtrl+Alt+R',
-    },
-  },
-};
+      showMenu: 'CmdOrCtrl+Alt+R'
+    }
+  }
+}

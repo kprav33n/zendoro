@@ -1,2 +1,8 @@
+# npm/yarn.
 node_modules
+
+# electron-packager.
 Zendoro-darwin-x64
+
+# macOS.
+.DS_Store
