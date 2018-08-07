@@ -9,6 +9,8 @@ const {
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const process = require('child_process');
+const uuidv4 = require('uuid/v4');
 
 // FIXME: Verify if this function is written in JS idiomatic way.
 function timeToString(ms, showIdle) {
@@ -103,50 +105,131 @@ class ConfigStore {
   }
 }
 
+class TaskWarriorExtension {
+  constructor() {
+    this.taskId = 0;
+  }
+
+  makeMenu(flow) {
+    const ext = this;
+    if (!flow.inProgress) {
+      const tasks = JSON.parse(process.execSync('/usr/local/bin/task export').toString());
+      const tasksMenu = tasks.filter(
+        t => (t.status !== 'deleted' && t.status !== 'completed'),
+      ).sort((x, y) => y.urgency - x.urgency).map(t => ({
+        label: t.description,
+        click() {
+          ext.taskId = t.id;
+          flow.startTask();
+        },
+      }));
+      return [
+        {
+          label: 'Start a TaskWarrior task',
+          submenu: tasksMenu,
+        },
+      ];
+    }
+
+    const tasks = JSON.parse(process.execSync(`/usr/local/bin/task ${this.taskId} export`).toString());
+    return tasks.map(t => ({
+      label: `Active: ${t.description}`,
+      enabled: false,
+    }));
+  }
+
+  onTaskStart() {
+    if (this.taskId !== 0) {
+      process.execSync(`/usr/local/bin/task start ${this.taskId}`);
+    }
+  }
+
+  onSmallBreakStart() {
+  }
+
+  onLongBreakStart() {
+  }
+
+  onEnd() {
+    if (this.taskId !== 0) {
+      process.execSync(`/usr/local/bin/task stop ${this.taskId}`);
+      this.taskId = 0;
+    }
+  }
+}
+
+class Task {
+  constructor(id = 0) {
+    if (id === 0) {
+      this.id = uuidv4();
+    } else {
+      this.id = id;
+    }
+  }
+}
+
+class StatsExtension {
+  constructor() {
+    this.task = null;
+    this.tasks = [];
+  }
+
+  makeMenu(_) {
+    const now = Date.now();
+    const tasks24H = this.tasks.filter(t => now - t.startTime < 24 * 60 * 60 * 1000);
+    const numTasks = tasks24H.filter(t => t.type === 'task').length;
+    const numSmallBreaks = tasks24H.filter(t => t.type === 'smallBreak').length;
+    const numLongBreaks = tasks24H.filter(t => t.type === 'longBreak').length;
+    return [
+      {
+        type: 'separator',
+      },
+      {
+        label: `🍅 ${numTasks} ☕ ${numSmallBreaks} 🍔 ${numLongBreaks} 24 Hours`,
+        enabled: false,
+      },
+    ];
+  }
+
+  onTaskStart() {
+    this.task = new Task();
+    this.task.startTime = Date.now();
+    this.task.type = 'task';
+    this.tasks.push(this.task);
+  }
+
+  onSmallBreakStart() {
+    this.task = new Task();
+    this.task.startTime = Date.now();
+    this.task.type = 'smallBreak';
+    this.tasks.push(this.task);
+  }
+
+  onLongBreakStart() {
+    this.task = new Task();
+    this.task.startTime = Date.now();
+    this.task.type = 'longBreak';
+    this.tasks.push(this.task);
+  }
+
+  onEnd() {
+    if (this.task !== null) {
+      this.task.endTime = Date.now();
+    }
+  }
+}
+
 class ZenFlow {
   constructor(config) {
+    const that = this;
+
     this.config = config;
     this.tray = new Tray(path.join(__dirname, 'assets/images/TrayIconTemplate.png'));
     this.tray.setToolTip('Zendoro');
-    const that = this;
-    this.contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Start a task',
-        accelerator: 'T',
-        click() { that.startTask(); },
-      },
-      {
-        label: 'Take a short break',
-        accelerator: 'S',
-        click() { that.startShortBreak(); },
-      },
-      {
-        label: 'Take a long break',
-        accelerator: 'L',
-        click() { that.startLongBreak(); },
-      },
-      {
-        label: 'Cancel',
-        accelerator: 'C',
-        click() { that.cancelCurrentActivity(); },
-      },
-      {
-        label: 'Quit',
-        accelerator: 'Q',
-        selector: 'terminate:',
-      },
-    ]);
-    this.tray.setContextMenu(this.contextMenu);
-    this.menuIndex = Object.freeze({
-      start: 0,
-      shortBreak: 1,
-      longBreak: 2,
-      cancel: 3,
-      quit: 4,
-    });
+
+    this.tray.on('click', _ => that.tray.popUpContextMenu(that.makeMenu()));
 
     this.updateInterval = setInterval(() => { this.updateTrayTitle(); }, 500);
-    this.transitionToIdle();
 
     this.willQuit = false;
     this.window = new BrowserWindow({ show: false });
@@ -166,21 +249,82 @@ class ZenFlow {
       this.config.config.globalShortcut.showMenu,
       () => { this.tray.popUpContextMenu(); },
     );
+
+    this.extensions = [
+      new TaskWarriorExtension(this),
+      new StatsExtension(this),
+    ];
+    this.transitionToIdle();
+  }
+
+  makeMenu() {
+    const that = this;
+    let template = [];
+    if (!this.inProgress) {
+      template = template.concat([
+        {
+          label: 'Start a task',
+          accelerator: 'T',
+          enabled: !that.inProgress,
+          click() { that.startTask(); },
+        },
+        {
+          label: 'Take a short break',
+          accelerator: 'S',
+          enabled: !that.inProgress,
+          click() { that.startShortBreak(); },
+        },
+        {
+          label: 'Take a long break',
+          accelerator: 'L',
+          enabled: !that.inProgress,
+          click() { that.startLongBreak(); },
+        },
+      ]);
+    } else {
+      template = template.concat([
+        {
+          label: 'Cancel/Finish',
+          accelerator: 'C',
+          enabled: that.inProgress,
+          click() { that.cancelCurrentActivity(); },
+        },
+      ]);
+    }
+    template = template.concat([
+      {
+        label: 'Quit',
+        accelerator: 'Q',
+        selector: 'terminate:',
+      },
+      {
+        type: 'separator',
+      },
+    ]);
+
+    template = template.concat(
+      this.extensions.map(e => e.makeMenu(this)).reduce((x, y) => x.concat(y), []),
+    );
+
+    return Menu.buildFromTemplate(template);
   }
 
   startTask() {
     this.currentActivity = 'Task';
     this.startTimer(this.config.config.activityLength.task);
+    this.extensions.forEach(e => e.onTaskStart());
   }
 
   startShortBreak() {
     this.currentActivity = 'Short break';
     this.startTimer(this.config.config.activityLength.shortBreak);
+    this.extensions.forEach(e => e.onSmallBreakStart());
   }
 
   startLongBreak() {
     this.currentActivity = 'Long break';
     this.startTimer(this.config.config.activityLength.longBreak);
+    this.extensions.forEach(e => e.onLongBreakStart());
   }
 
   cancelCurrentActivity() {
@@ -193,6 +337,7 @@ class ZenFlow {
   beforeQuit() {
     clearInterval(this.updateInterval);
     globalShortcut.unregisterAll();
+    this.transitionToIdle();
     this.willQuit = true;
   }
 
@@ -212,21 +357,14 @@ class ZenFlow {
   }
 
   transitionToIdle() {
+    this.extensions.forEach(e => e.onEnd());
     this.inProgress = false;
     this.end = Date.now();
-    this.contextMenu.items[this.menuIndex.start].enabled = true;
-    this.contextMenu.items[this.menuIndex.shortBreak].enabled = true;
-    this.contextMenu.items[this.menuIndex.longBreak].enabled = true;
-    this.contextMenu.items[this.menuIndex.cancel].enabled = false;
   }
 
   transitionToRunning(length) {
     this.inProgress = true;
     this.end = new Date(Date.now() + length).getTime();
-    this.contextMenu.items[this.menuIndex.start].enabled = false;
-    this.contextMenu.items[this.menuIndex.shortBreak].enabled = false;
-    this.contextMenu.items[this.menuIndex.longBreak].enabled = false;
-    this.contextMenu.items[this.menuIndex.cancel].enabled = true;
   }
 }
 

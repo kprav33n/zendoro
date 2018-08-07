@@ -13,7 +13,8 @@
   "author": "Praveen Kumar <praveen+git@kumar.in>",
   "license": "MIT",
   "dependencies": {
-    "electron": "^2.0.5"
+    "electron": "^2.0.5",
+    "uuid": "^3.3.2"
   },
   "devDependencies": {
     "electron-packager": "^12.0.0",
@@ -24,8 +25,8 @@
     "eslint-plugin-jsx-a11y": "^6.0.3",
     "eslint-plugin-node": "^5.2.1",
     "eslint-plugin-promise": "^3.6.0",
-    "eslint-plugin-standard": "^3.0.1",
-    "eslint-plugin-react": "^7.9.1"
+    "eslint-plugin-react": "^7.9.1",
+    "eslint-plugin-standard": "^3.0.1"
   },
   "eslintIgnore": [
     "node_modules"
